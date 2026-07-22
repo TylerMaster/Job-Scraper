@@ -1,0 +1,33 @@
+# Java / Gradle
+api/build/
+api/.gradle/
+api/out/
+*.class
+*.jar
+*.war
+*.ear
+
+# Spring Boot
+api/src/main/resources/application-local.yml
+
+# Python
+importer/.venv/
+importer/__pycache__/
+importer/*.pyc
+importer/*.pyo
+importer/.pytest_cache/
+importer/.env
+
+# Node / React
+web/node_modules/
+web/dist/
+web/.env.local
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
