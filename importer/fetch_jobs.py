@@ -12,12 +12,98 @@ Usage:
 
 import argparse
 import json
+import os
 import re
 import time
 from datetime import datetime, timezone
 
+
+import psycopg2
 import requests
+from dotenv import load_dotenv
 from bs4 import BeautifulSoup
+from psycopg2.extras import execute_values
+
+load_dotenv()
+
+# ---------------------------------------------------------------------------
+# DATABASE STUFF
+# ---------------------------------------------------------------------------
+
+
+def get_db_conn():
+    return psycopg2.connect(
+        host=os.environ["DB_HOST"],
+        port=os.environ["DB_PORT"],
+        dbname=os.environ["DB_NAME"],
+        user=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"],
+    )
+
+
+# ---------------------------------------------------------------------------
+#
+# ---------------------------------------------------------------------------
+
+
+
+def save_jobs(conn, jobs):
+    sql = """
+        INSERT INTO jobs (
+            source,
+            source_id,
+            title,
+            company,
+            location,
+            is_remote,
+            salary_min,
+            salary_max,
+            description,
+            url,
+            raw_text,
+            posted_at
+        )
+        VALUES %s
+        ON CONFLICT (source, source_id) DO UPDATE SET
+            title = EXCLUDED.title,
+            company = EXCLUDED.company,
+            location = EXCLUDED.location,
+            is_remote = EXCLUDED.is_remote,
+            salary_min = EXCLUDED.salary_min,
+            salary_max = EXCLUDED.salary_max,
+            description = EXCLUDED.description,
+            url = EXCLUDED.url,
+            raw_text = EXCLUDED.raw_text,
+            posted_at = EXCLUDED.posted_at,
+            scraped_at = NOW()
+    """
+
+    rows = []
+
+    for job in jobs:
+        rows.append(
+            (
+                job["source"],
+                job["source_id"],
+                job["title"],
+                job["company"],
+                job["location"],
+                job["is_remote"],
+                job["salary_min"],
+                job["salary_max"],
+                job["description"],
+                job["url"],
+                job["raw_text"],
+                job["posted_at"],
+            )
+        )
+
+    with conn.cursor() as cur:
+        execute_values(cur, sql, rows)
+
+    conn.commit()
+
+    return len(rows)
 
 HN_API = "https://hacker-news.firebaseio.com/v0"
 WHOISHIRING_USER = "whoishiring"
@@ -228,6 +314,13 @@ def main():
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(jobs, f, indent=2, ensure_ascii=False)
     print(f"Written to {args.output}")
+
+    conn = get_db_conn()
+    try:
+        saved = save_jobs(conn, jobs)
+        print(f"Saved {saved} jobs to PostgreSQL")
+    finally:
+        conn.close()
 
     # Print a quick sample so you can sanity-check without opening the file
     print("\n--- Sample: first 5 parsed postings ---")
